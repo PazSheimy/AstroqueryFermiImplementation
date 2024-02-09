@@ -8,6 +8,8 @@ import astropy.units as u
 from ..query import BaseQuery
 from ..utils import commons, async_to_sync
 from . import conf
+from .async_download import async_download_fermi_data
+
 
 __all__ = ['FermiLAT', 'FermiLATClass',
            'GetFermilatDatafile', 'get_fermilat_datafile',
@@ -25,33 +27,63 @@ class FermiLATClass(BaseQuery):
                                r'<a href="(https://fermi\.gsfc\.nasa\.gov/.*?)"')
     TIMEOUT = conf.timeout
 
-    def query_object_async(self, *args, **kwargs):
-        """
-        Query the FermiLAT database
+    # def query_object_async(self, *args, **kwargs):
+    #     """
+    #     Query the FermiLAT database
 
-        Returns
-        -------
-        url : str
-            The URL of the page with the results (still need to scrape this
-            page to download the data: easy for wget)
-        """
+    #     Returns
+    #     -------
+    #     url : str
+    #         The URL of the page with the results (still need to scrape this
+    #         page to download the data: easy for wget)
+    #     """
 
-        payload = self._parse_args(*args, **kwargs)
+    #     payload = self._parse_args(*args, **kwargs)
 
-        if kwargs.get('get_query_payload'):
-            return payload
+    #     if kwargs.get('get_query_payload'):
+    #         return payload
 
-        result = self._request("POST", url=self.request_url,
-                               data=payload, timeout=self.TIMEOUT)
-        re_result = self.result_url_re.findall(result.text)
+    #     result = self._request("POST", url=self.request_url,
+    #                            data=payload, timeout=self.TIMEOUT)
+    #     re_result = self.result_url_re.findall(result.text)
 
-        if len(re_result) == 0:
-            raise ValueError("Results did not contain a result url. something "
-                             "went awry (that hasn't been tested yet)")
-        else:
-            result_url = re_result[0]
+    #     if len(re_result) == 0:
+    #         raise ValueError("Results did not contain a result url. something "
+    #                          "went awry (that hasn't been tested yet)")
+    #     else:
+    #         result_url = re_result[0]
 
-        return result_url
+    #     return result_url
+
+    def query_object_async(self, *args, download=False, output_dir=None, **kwargs):
+    """
+    Query the FermiLAT database. Optionally download the data files asynchronously.
+
+    Parameters
+    ----------
+    download : bool, optional
+        If True, automatically download the data files to the specified output directory.
+    output_dir : str, optional
+        The directory where the downloaded FITS files should be saved. Required if download is True.
+    """
+
+    # Existing logic to construct the query and obtain the result_url
+    payload = self._parse_args(*args, **kwargs)
+    result = self._request("POST", url=self.request_url, data=payload, timeout=self.TIMEOUT)
+    re_result = self.result_url_re.findall(result.text)
+    if len(re_result) == 0:
+        raise ValueError("Results did not contain a result url. Something went awry.")
+    else:
+        result_url = re_result[0]
+
+    # New logic for downloading data files
+    if download:
+        if output_dir is None:
+            raise ValueError("output_dir must be specified if download is True.")
+        async_download_fermi_data(result_url, output_dir)
+    
+    return result_url
+
 
     def _parse_args(self, name_or_coords, *, searchradius='', obsdates='',
                     timesys='Gregorian', energyrange_MeV='',
